@@ -39,7 +39,7 @@ struct SettingsView: View {
             }
 
             Section {
-                Toggle("Launch at login", isOn: Binding(get: { loginItem.isEnabled }, set: loginItem.setEnabled))
+                Toggle("Launch at login", isOn: Binding(get: { loginItem.isEnabled }, set: { loginItem.setEnabled($0) }))
                 if loginItem.status == .requiresApproval {
                     Text("Approve it in System Settings → General → Login Items.").font(.caption).foregroundStyle(.secondary)
                 }
