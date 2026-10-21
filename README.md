@@ -5,14 +5,17 @@ A macOS menu bar utility that quits an app when you close its last window — a 
 
 ## How it decides to quit
 
-When an app's window closes, it waits the configured delay (default 2 s), then quits the app only if **all** hold:
+When an app's window closes — or its last visible window disappears, which catches menu bar apps like Claude,
+ChatGPT or Slack that hide their window instead of closing it — it waits the configured delay (default 2 s), then quits the app only if **all** hold:
 
 - It is a regular Dock app. Background agents (Dock/Launchpad, Spotlight, Control Center, Notification Center, …)
   are never touched, and Finder is always protected.
 - Your rules allow it ("all apps except…" or "only these apps…", matched by bundle identifier).
 - Accessibility reports no windows left, including minimized ones.
-- The window server shows no remaining window that has ever been visible — this catches windows on other
-  Spaces and in full screen, which Accessibility can't see.
+- The window server shows no remaining window that has ever been visible and is still open. A window parked
+  on another Space or in full screen counts as open (Accessibility can't see those); a window hidden by the
+  app, off screen on the current Space, counts as closed.
+- The app isn't hidden (⌘H).
 
 If any check can't be answered, the app is left running. Quitting uses a normal quit, so unsaved-changes prompts still appear.
 
@@ -62,4 +65,5 @@ re-grant Accessibility.
 
 - A window left on another Space before Quit on Close started isn't known until you visit that Space; until then
   closing the app's last visible window may quit it.
-- Apps that keep a hidden-but-alive window after you close it won't be quit (by design: when unsure, it doesn't quit).
+- Telling hidden windows from windows on other Spaces uses undocumented window-server calls (the same ones yabai
+  and AltTab use). If a future macOS removes them, hidden windows count as open and those apps stay running.
