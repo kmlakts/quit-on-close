@@ -13,6 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         updateStatusItem()
         observeSettings()
+        showBackgroundAppsNoticeOnce()
 
         if permissions.isTrusted {
             watcher.start()
@@ -30,6 +31,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         showSettings()
         return true
+    }
+
+    // MARK: First launch
+
+    /// Apps that hide their window on close to keep running for notifications get quit like any other,
+    /// which can surprise people, so say so once.
+    private func showBackgroundAppsNoticeOnce() {
+        guard !settings.hasSeenBackgroundAppsNotice else { return }
+        settings.hasSeenBackgroundAppsNotice = true
+
+        let alert = NSAlert()
+        alert.messageText = "Apps that run in the background will be quit too"
+        alert.informativeText = """
+            Chat apps such as Slack, Discord, Teams and WhatsApp, and other apps that send notifications, \
+            often keep running when you close their window. Quit on Close quits them too, so they stop \
+            sending notifications until you open them again.
+
+            To keep an app running, add it to Never quit in Settings.
+            """
+        alert.addButton(withTitle: "OK")
+        alert.addButton(withTitle: "Open Settings")
+        NSApp.activate()
+        if alert.runModal() == .alertSecondButtonReturn {
+            showSettings()
+        }
     }
 
     // MARK: Menu bar

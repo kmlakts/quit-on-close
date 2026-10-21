@@ -135,6 +135,7 @@ final class WindowWatcher {
     }
 
     private func quitIfWindowless(pid: pid_t) {
+        // ⌘H also takes every window off screen, so a hidden app must never count as windowless.
         guard settings.isEnabled,
               let tracker = trackers[pid],
               let app = NSRunningApplication(processIdentifier: pid), !app.isTerminated, !app.isHidden,
@@ -143,8 +144,10 @@ final class WindowWatcher {
               !Self.protectedBundleIDs.contains(bundleID),
               settings.allowsQuitting(bundleID) else { return }
 
-        // Accessibility sees minimized windows but only on the current Space. Windows the app has shown
-        // elsewhere (other Spaces, full screen) are caught by the window server. Any doubt keeps it open.
+        // Accessibility sees minimized windows but only on the current Space, and not windows the app hid.
+        // The window server can't tell a minimized window from a hidden one, so this check is what keeps
+        // minimized windows open. Windows the app has shown elsewhere (other Spaces, full screen) are
+        // caught by the window server. Any doubt keeps it open.
         guard let windows = tracker.windows(), windows.isEmpty else { return }
         guard let existing = WindowServer.windows(pid: pid) else { return }
         let seen = (seenWindows[pid] ?? []).intersection(existing.map(\.id))
@@ -183,7 +186,8 @@ enum WindowServer {
 
     /// Whether a window the user has seen should still count as open.
     /// Off screen but on another Space means it's elsewhere; off screen on the current Space (or on no
-    /// Space) means the app hid it — what menu bar apps do instead of closing. Unknown means open.
+    /// Space) means the app hid it — what menu bar apps do instead of closing — or minimized it, which
+    /// the caller must rule out through Accessibility. Unknown means open.
     static func isOpen(_ window: Window, currentSpaces: Set<Int>?) -> Bool {
         if window.isOnScreen { return true }
         guard let currentSpaces, let spaces = SkyLight.spaces(of: window.id) else { return true }

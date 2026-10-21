@@ -5,7 +5,7 @@ A macOS menu bar utility that quits an app when you close its last window — a 
 
 ## How it decides to quit
 
-When an app's window closes — or its last visible window disappears, which catches menu bar apps like Claude,
+When an app's window closes — or its last visible window disappears, which catches apps like Claude,
 ChatGPT or Slack that hide their window instead of closing it — it waits the configured delay (default 2 s), then quits the app only if **all** hold:
 
 - It is a regular Dock app. Background agents (Dock/Launchpad, Spotlight, Control Center, Notification Center, …)
@@ -15,9 +15,10 @@ ChatGPT or Slack that hide their window instead of closing it — it waits the c
 - The window server shows no remaining window that has ever been visible and is still open. A window parked
   on another Space or in full screen counts as open (Accessibility can't see those); a window hidden by the
   app, off screen on the current Space, counts as closed.
-- The app isn't hidden (⌘H).
+- The app isn't hidden (⌘H), which also takes all its windows off screen.
 
-If any check can't be answered, the app is left running. Quitting uses a normal quit, so unsaved-changes prompts still appear.
+If any check can't be answered, the app is left running.
+The window server can't tell a minimized window from a hidden one; Accessibility can, so minimized windows keep the app open. Quitting uses a normal quit, so unsaved-changes prompts still appear.
 
 ## Install
 
@@ -62,6 +63,10 @@ Keep the .p12 and its password backed up and private. Releases signed with a dif
 re-grant Accessibility.
 
 ## Known limits
+
+- Hiding the window on close usually means "keep running in the background". Chat apps such as Slack, Discord,
+  Teams and WhatsApp do it too, so they are quit and stop delivering notifications. A notice on first launch
+  says so. Add any you want kept running to **Never quit**.
 
 - A window left on another Space before Quit on Close started isn't known until you visit that Space; until then
   closing the app's last visible window may quit it.

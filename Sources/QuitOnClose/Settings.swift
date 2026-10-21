@@ -17,6 +17,7 @@ final class Settings {
         static let apps = "apps"
         static let closeDelay = "closeDelay"
         static let showMenuBarIcon = "showMenuBarIcon"
+        static let hasSeenBackgroundAppsNotice = "hasSeenBackgroundAppsNotice"
     }
 
     @ObservationIgnored private let defaults: UserDefaults
@@ -28,6 +29,8 @@ final class Settings {
     /// Seconds to wait after the last window closes before quitting.
     var closeDelay: Int { didSet { defaults.set(closeDelay, forKey: Key.closeDelay) } }
     var showMenuBarIcon: Bool { didSet { defaults.set(showMenuBarIcon, forKey: Key.showMenuBarIcon) } }
+    /// Whether the user has been told that apps running in the background for notifications get quit too.
+    var hasSeenBackgroundAppsNotice: Bool { didSet { defaults.set(hasSeenBackgroundAppsNotice, forKey: Key.hasSeenBackgroundAppsNotice) } }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -43,6 +46,7 @@ final class Settings {
         apps = defaults.stringArray(forKey: Key.apps) ?? []
         closeDelay = max(1, defaults.integer(forKey: Key.closeDelay))
         showMenuBarIcon = defaults.bool(forKey: Key.showMenuBarIcon)
+        hasSeenBackgroundAppsNotice = defaults.bool(forKey: Key.hasSeenBackgroundAppsNotice)
     }
 
     /// Whether the user's rules allow quitting the app with this bundle identifier.
