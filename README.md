@@ -69,7 +69,6 @@ re-grant Accessibility.
 - Hiding the window on close usually means "keep running in the background". Chat apps such as Slack, Discord,
   Teams and WhatsApp do it too, so they are quit and stop delivering notifications. A notice on first launch
   says so. Add any you want kept running to **Never quit**.
-
 - A window left on another Space before Quit on Close started isn't known until you visit that Space; until then
   closing the app's last visible window may quit it.
 - Telling hidden windows from windows on other Spaces uses undocumented window-server calls (the same ones yabai
