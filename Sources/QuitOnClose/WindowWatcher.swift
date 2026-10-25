@@ -23,6 +23,11 @@ final class WindowWatcher {
     /// Apps that had a window on screen at the last refresh.
     private var visiblePIDs: Set<pid_t> = []
     private var pollTask: Task<Void, Never>?
+    /// The last click on a window's close button, to tell an app hiding itself on close from ⌘H.
+    private var lastCloseClick: (pid: pid_t, time: ContinuousClock.Instant)?
+    /// Apps that hid themselves when their close button was clicked, instead of closing the window.
+    private var hiddenOnClose: Set<pid_t> = []
+    private var mouseMonitor: Any?
     private var observers: [NSObjectProtocol] = []
     private let ownPID = ProcessInfo.processInfo.processIdentifier
 
@@ -51,6 +56,21 @@ final class WindowWatcher {
             })
         }
 
+        // Some apps (Gemini) hide themselves entirely when their close button is clicked. That looks
+        // like ⌘H, which must never quit an app, so remember close-button clicks to tell the two apart.
+        observers.append(center.addObserver(forName: NSWorkspace.didHideApplicationNotification, object: nil, queue: .main) { [weak self] note in
+            guard let pid = Self.pid(from: note) else { return }
+            MainActor.assumeIsolated { self?.appDidHide(pid: pid) }
+        })
+        observers.append(center.addObserver(forName: NSWorkspace.didUnhideApplicationNotification, object: nil, queue: .main) { [weak self] note in
+            guard let pid = Self.pid(from: note) else { return }
+            MainActor.assumeIsolated { _ = self?.hiddenOnClose.remove(pid) }
+        })
+        mouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDown) { [weak self] _ in
+            let location = NSEvent.mouseLocation
+            MainActor.assumeIsolated { self?.recordCloseButtonClick(at: location) }
+        }
+
         for app in NSWorkspace.shared.runningApplications {
             track(pid: app.processIdentifier)
         }
@@ -74,6 +94,19 @@ final class WindowWatcher {
             scheduleQuitCheck(pid: pid)
         }
         visiblePIDs = Set(visible.keys)
+    }
+
+    private func recordCloseButtonClick(at location: NSPoint) {
+        guard let pid = Accessibility.closeButtonOwner(at: location), trackers[pid] != nil else { return }
+        lastCloseClick = (pid, .now)
+    }
+
+    private func appDidHide(pid: pid_t) {
+        // The button acts on mouse up, so allow for the click being held a moment.
+        guard let click = lastCloseClick, click.pid == pid, ContinuousClock.now - click.time < .seconds(3) else { return }
+        lastCloseClick = nil
+        hiddenOnClose.insert(pid)
+        scheduleQuitCheck(pid: pid)
     }
 
     private nonisolated static func pid(from note: Notification) -> pid_t? {
@@ -105,6 +138,7 @@ final class WindowWatcher {
         pendingQuits.removeValue(forKey: pid)?.cancel()
         trackers.removeValue(forKey: pid)?.stop()
         seenWindows[pid] = nil
+        hiddenOnClose.remove(pid)
     }
 
     private func handle(_ event: AppTracker.Event, pid: pid_t) {
@@ -135,10 +169,12 @@ final class WindowWatcher {
     }
 
     private func quitIfWindowless(pid: pid_t) {
-        // ⌘H also takes every window off screen, so a hidden app must never count as windowless.
+        // ⌘H also takes every window off screen, so a hidden app must never count as windowless —
+        // unless it hid itself when its close button was clicked.
+        let hidOnClose = hiddenOnClose.contains(pid)
         guard settings.isEnabled,
               let tracker = trackers[pid],
-              let app = NSRunningApplication(processIdentifier: pid), !app.isTerminated, !app.isHidden,
+              let app = NSRunningApplication(processIdentifier: pid), !app.isTerminated, !app.isHidden || hidOnClose,
               app.activationPolicy == .regular,
               let bundleID = app.bundleIdentifier,
               !Self.protectedBundleIDs.contains(bundleID),
@@ -148,7 +184,9 @@ final class WindowWatcher {
         // The window server can't tell a minimized window from a hidden one, so this check is what keeps
         // minimized windows open. Windows the app has shown elsewhere (other Spaces, full screen) are
         // caught by the window server. Any doubt keeps it open.
-        guard let windows = tracker.windows(), windows.isEmpty else { return }
+        // An app that hid itself on close keeps its windows, hidden with it; only minimized ones still count.
+        guard let windows = tracker.windows(),
+              hidOnClose ? !windows.contains(where: AppTracker.isMinimized) : windows.isEmpty else { return }
         guard let existing = WindowServer.windows(pid: pid) else { return }
         let seen = (seenWindows[pid] ?? []).intersection(existing.map(\.id))
         seenWindows[pid] = seen
@@ -157,6 +195,30 @@ final class WindowWatcher {
 
         print("Quitting \(app.localizedName ?? bundleID): last window closed")
         app.terminate()
+    }
+}
+
+/// System-wide Accessibility queries.
+@MainActor
+private enum Accessibility {
+    private static let systemWide: AXUIElement = {
+        let element = AXUIElementCreateSystemWide()
+        // Hit-testing asks the app under the pointer; never let a hung app stall us.
+        AXUIElementSetMessagingTimeout(element, 0.25)
+        return element
+    }()
+
+    /// The process whose window close button is at this screen location (AppKit coordinates), if any.
+    static func closeButtonOwner(at location: NSPoint) -> pid_t? {
+        guard let primaryHeight = NSScreen.screens.first?.frame.maxY else { return nil }
+        var element: AXUIElement?
+        guard AXUIElementCopyElementAtPosition(systemWide, Float(location.x), Float(primaryHeight - location.y), &element) == .success,
+              let element else { return nil }
+        var subrole: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(element, kAXSubroleAttribute as CFString, &subrole) == .success,
+              subrole as? String == kAXCloseButtonSubrole else { return nil }
+        var pid: pid_t = 0
+        return AXUIElementGetPid(element, &pid) == .success ? pid : nil
     }
 }
 

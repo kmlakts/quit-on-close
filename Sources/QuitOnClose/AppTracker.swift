@@ -52,6 +52,13 @@ final class AppTracker {
         return value as? [AXUIElement]
     }
 
+    /// Whether the window is minimized. Unknown counts as minimized, which keeps the app open.
+    static func isMinimized(_ window: AXUIElement) -> Bool {
+        var value: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(window, kAXMinimizedAttribute as CFString, &value) == .success else { return true }
+        return value as? Bool ?? true
+    }
+
     private var refcon: UnsafeMutableRawPointer {
         Unmanaged.passUnretained(self).toOpaque()
     }

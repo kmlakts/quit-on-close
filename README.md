@@ -15,7 +15,9 @@ ChatGPT or Slack that hide their window instead of closing it — it waits the c
 - The window server shows no remaining window that has ever been visible and is still open. A window parked
   on another Space or in full screen counts as open (Accessibility can't see those); a window hidden by the
   app, off screen on the current Space, counts as closed.
-- The app isn't hidden (⌘H), which also takes all its windows off screen.
+- The app isn't hidden (⌘H), which also takes all its windows off screen. The exception is an app that hides
+  itself right after you click its close button, as Gemini does: that counts as closing it, as long as none of its
+  windows are minimized.
 
 If any check can't be answered, the app is left running.
 The window server can't tell a minimized window from a hidden one; Accessibility can, so minimized windows keep the app open. Quitting uses a normal quit, so unsaved-changes prompts still appear.
